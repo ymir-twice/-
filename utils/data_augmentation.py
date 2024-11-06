@@ -7,7 +7,7 @@ import torchvision.transforms as transforms
 
 
 # 下面的 img 、label、edge 均要求是 PIL 的 Image 类
-def data_augmentation(img, label, edge=None):
+def data_augmentation(img, label):
     r_img, r_label = img, label
     r_img, r_label = _random_mirror(r_img, r_label)
     #r_img, r_label = _random_scale(r_img, r_label, r_edge)
@@ -17,10 +17,21 @@ def data_augmentation(img, label, edge=None):
     # 便于使用opencv或者其他图像处理库。 最后的返回值，也应该是 Image 对象， 
     # 因为torchvision.tranforms.ToTensor 以及 resize 要求只能对 Image 对象处理
 
-    r_img = add_salt_pepper_noise(r_img, 0.2)
+    r_img = add_salt_pepper_noise(r_img, 0.1)
+    r_img = bilateral_filter_denoise(r_img, 3)
     r_img = CLAHE(r_img)
 
     return r_img, r_label
+
+
+def data_augmentation_test(img):
+
+    r_img = bilateral_filter_denoise(img, 3)
+    r_img = CLAHE(r_img)
+
+    return r_img
+
+
 
 def add_salt_pepper_noise(image, prob):
     """
