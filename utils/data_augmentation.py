@@ -17,26 +17,24 @@ def data_augmentation(img, label, edge=None):
     # 便于使用opencv或者其他图像处理库。 最后的返回值，也应该是 Image 对象， 
     # 因为torchvision.tranforms.ToTensor 以及 resize 要求只能对 Image 对象处理
 
-    r_img = _random_color_jitter(r_img)
+    r_img = add_salt_pepper_noise(r_img, 0.2)
     r_img = CLAHE(r_img)
 
     return r_img, r_label
 
 def add_salt_pepper_noise(image, prob):
     """
-    向图像添加椒盐噪声
-    :param image: 输入的灰度图像或彩色图像 (numpy 数组)
+    向PIL图像添加椒盐噪声
+    :param image: 输入的PIL图像
     :param prob: 椒盐噪声的比例（0到1之间），例如0.01表示1%的像素被设置为椒盐噪声
-    :return: 带有椒盐噪声的图像
+    :return: 带有椒盐噪声的PIL图像
     """
-    output = np.copy(image)
-    # 设置椒盐噪声
-    salt_pepper_noise = np.random.rand(*image.shape[:2])
-    # 设置盐（白色）噪声
+    image_np = np.array(image)
+    output = np.copy(image_np)
+    salt_pepper_noise = np.random.rand(*output.shape[:2])
     output[salt_pepper_noise < prob / 2] = 255
-    # 设置椒（黑色）噪声
     output[salt_pepper_noise > 1 - prob / 2] = 0
-    return output
+    return Image.fromarray(output)
 
 
 def usm_sharpen(image, radius=5, threshold=10, amount=150):
