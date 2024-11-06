@@ -41,7 +41,7 @@ def add_salt_pepper_noise(image, strength, exec_prob):
     :param prob: 椒盐噪声的比例（0到1之间），例如0.01表示1%的像素被设置为椒盐噪声
     :return: 带有椒盐噪声的PIL图像
     """
-    if random.random > exec_prob:
+    if random.random() > exec_prob:
         image_np = np.array(image)
         output = np.copy(image_np)
         salt_pepper_noise = np.random.rand(*output.shape[:2])
