@@ -18,7 +18,7 @@ def data_augmentation(img, label):
     # 便于使用opencv或者其他图像处理库。 最后的返回值，也应该是 Image 对象， 
     # 因为torchvision.tranforms.ToTensor 以及 resize 要求只能对 Image 对象处理
 
-    r_img = add_salt_pepper_noise(r_img, 0.05, )
+    r_img = add_salt_pepper_noise(r_img, 0.05, 0.5)
     r_img = median_filter_denoise(r_img, 3)
     r_img = CLAHE(r_img)
 
