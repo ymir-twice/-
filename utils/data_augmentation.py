@@ -4,6 +4,7 @@ from utils.args import DA_ARGS
 import cv2
 import torchvision.transforms.functional as TF
 import torchvision.transforms as transforms
+import random
 
 
 # 下面的 img 、label、edge 均要求是 PIL 的 Image 类
@@ -17,8 +18,8 @@ def data_augmentation(img, label):
     # 便于使用opencv或者其他图像处理库。 最后的返回值，也应该是 Image 对象， 
     # 因为torchvision.tranforms.ToTensor 以及 resize 要求只能对 Image 对象处理
 
-    r_img = add_salt_pepper_noise(r_img, 0.1)
-    r_img = bilateral_filter_denoise(r_img, 3)
+    r_img = add_salt_pepper_noise(r_img, 0.05, )
+    r_img = median_filter_denoise(r_img, 3)
     r_img = CLAHE(r_img)
 
     return r_img, r_label
@@ -33,19 +34,22 @@ def data_augmentation_test(img):
 
 
 
-def add_salt_pepper_noise(image, prob):
+def add_salt_pepper_noise(image, strength, exec_prob):
     """
     向PIL图像添加椒盐噪声
     :param image: 输入的PIL图像
     :param prob: 椒盐噪声的比例（0到1之间），例如0.01表示1%的像素被设置为椒盐噪声
     :return: 带有椒盐噪声的PIL图像
     """
-    image_np = np.array(image)
-    output = np.copy(image_np)
-    salt_pepper_noise = np.random.rand(*output.shape[:2])
-    output[salt_pepper_noise < prob / 2] = 255
-    output[salt_pepper_noise > 1 - prob / 2] = 0
-    return Image.fromarray(output)
+    if random.random > exec_prob:
+        image_np = np.array(image)
+        output = np.copy(image_np)
+        salt_pepper_noise = np.random.rand(*output.shape[:2])
+        output[salt_pepper_noise < strength / 2] = 255
+        output[salt_pepper_noise > 1 - strength / 2] = 0
+        return Image.fromarray(output)
+    else:
+        return image
 
 
 def usm_sharpen(image, radius=5, threshold=10, amount=150):
