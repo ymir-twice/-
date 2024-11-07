@@ -18,9 +18,12 @@ def data_augmentation(img, label):
     # 便于使用opencv或者其他图像处理库。 最后的返回值，也应该是 Image 对象， 
     # 因为torchvision.tranforms.ToTensor 以及 resize 要求只能对 Image 对象处理
 
-    r_img = add_salt_pepper_noise(r_img, 0.05, 0.5)
-    r_img = median_filter_denoise(r_img, 3)
-    r_img = CLAHE(r_img)
+    r_img, if_salt = detect_and_denoise_salt_pepper(r_img, 0.05, 0.5)
+    if if_salt:
+        r_img = CLAHE(r_img)
+    else:
+        r_img = gaussian_blur(r_img)
+        r_img = CLAHE(r_img)
 
     return r_img, r_label
 
@@ -32,6 +35,33 @@ def data_augmentation_test(img):
 
     return r_img
 
+def detect_and_denoise_salt_pepper(img, kernel_size=3, noise_threshold=0.02):
+    """
+    检测图像中的椒盐噪声并去噪。
+    参数:
+    - img (Image): 输入的 PIL 图像。
+    - kernel_size (int): 中值滤波器的窗口大小。
+    - noise_threshold (float): 判断噪声存在的阈值，默认0.02，即2%的极端像素。
+    
+    返回:
+    - Image: 经过去噪处理的图像（如果检测到噪声），否则返回原图像。
+    """
+    # 将图像转换为灰度
+    gray_img = np.array(img.convert("L"))
+    
+    # 计算极端像素的比例（假设0和255表示椒盐噪声）
+    num_pixels = gray_img.size
+    salt_pepper_count = np.sum((gray_img == 0) | (gray_img == 255))
+    noise_ratio = salt_pepper_count / num_pixels
+    
+    # 检查是否存在椒盐噪声
+    if noise_ratio > noise_threshold:
+        # 应用中值滤波去除噪声
+        denoised_img = cv2.medianBlur(gray_img, kernel_size)
+        return Image.fromarray(denoised_img).convert("RGB"), True
+    else:
+        # 如果噪声水平低于阈值，直接返回原图像
+        return img, False
 
 
 def add_salt_pepper_noise(image, strength, exec_prob):
@@ -105,29 +135,29 @@ def DCT_augmentation(img, block_size=8):
     
     # 获取图像的尺寸
     h, w = gray_img.shape
-    
+
     # 将图像分块并对每块进行DCT变换
     dct_img = np.zeros_like(gray_img, dtype=np.float32)
     for i in range(0, h, block_size):
         for j in range(0, w, block_size):
             # 提取当前块
             block = gray_img[i:i+block_size, j:j+block_size]
-            
+
             # 对块进行DCT变换
             dct_block = cv2.dct(np.float32(block))
-            
+
             # 对DCT变换后的系数进行增强（可以加噪声或其他处理）
             dct_block += np.random.normal(0, 1, dct_block.shape)  # 增加噪声作为增强
-            
+
             # 将增强后的DCT系数反变换回原空间
             idct_block = cv2.idct(dct_block)
-            
+
             # 存储反变换后的块
             dct_img[i:i+block_size, j:j+block_size] = idct_block
 
     # 将DCT增强后的图像转换回RGB格式
     enhanced_img = np.stack([dct_img] * 3, axis=-1).astype(np.uint8)
-    
+
     return Image.fromarray(enhanced_img)
 
 
@@ -137,10 +167,10 @@ def DCT_denoise(img, block_size=8, threshold=10):
     
     # 将图像转换为灰度图像，因为DCT通常应用于单通道图像
     gray_img = cv2.cvtColor(r_img, cv2.COLOR_RGB2GRAY)
-    
+
     # 获取图像的尺寸
     h, w = gray_img.shape
-    
+
     # 将图像分块并对每块进行DCT变换
     dct_img = np.zeros_like(gray_img, dtype=np.float32)
     for i in range(0, h, block_size):
@@ -166,17 +196,6 @@ def DCT_denoise(img, block_size=8, threshold=10):
     return Image.fromarray(denoised_img)
 
 
-def CLAHE2(img):
-    r_img = np.array(img)
-    r_img = cv2.cvtColor(r_img, cv2.COLOR_RGB2LAB)
-    r_img_l = r_img[:, :, 0] # Convert to range [0,1]
-    clahe = cv2.createCLAHE(clipLimit=1.5, tileGridSize=(8,8))
-    r_img_l = clahe.apply(r_img_l)
-    r_img[:, :, 0] = r_img_l
-    r_img = cv2.cvtColor(r_img, cv2.COLOR_LAB2RGB)
-    return Image.fromarray(r_img)
-
-
 def gaussian_blur(image):
     img_array = np.array(image)  # 转换为 np.array
     if np.random.random() < DA_ARGS['p_random_gaussian_blur']:
@@ -190,17 +209,17 @@ def usm_sharpen(image, radius=5, threshold=10, amount=150):
     
     # 使用 OpenCV 的 GaussianBlur 进行模糊处理
     blurred = cv2.GaussianBlur(img_array, (radius, radius), 0)
-    
+
     # 计算原图像和模糊图像的差值
     mask = img_array - blurred
-    
+
     # 对差值进行增强处理（锐化）
     sharpened = img_array + amount * mask / 100
-    
+
     # 使用阈值筛选变化
     low_contrast_mask = np.abs(mask) < threshold
     np.copyto(sharpened, img_array, where=low_contrast_mask)
-    
+
     # 确保像素值合法
     sharpened = np.clip(sharpened, 0, 255).astype(np.uint8)
     
@@ -227,9 +246,6 @@ def bilateral_filter_denoise(img, d=9, sigmaColor=75, sigmaSpace=75):
     denoised_img = cv2.bilateralFilter(gray_img, d, sigmaColor, sigmaSpace)
     #denoised_img = denoised_img.convert("RGB")
     return Image.fromarray(denoised_img).convert("RGB")
-
-
-
 
 
 
