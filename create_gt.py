@@ -13,10 +13,10 @@ def main():
         shutil.rmtree("eval/test_ground_truths")
         os.mkdir("eval/test_ground_truths")
 
-    testmeta = pd.read_csv("stats/testB-meta.csv", dtype=object)
+    testmeta = pd.read_csv("stats/test-meta.csv", dtype=object)
     ids = list(testmeta['id'])
     for id in ids:
-        imdata = cv2.imread("data/annotations/testB/" + id + '.png', cv2.IMREAD_GRAYSCALE)
+        imdata = cv2.imread("data/annotations/test/" + id + '.png', cv2.IMREAD_GRAYSCALE)
         np.save("eval/test_ground_truths/ground_truth_" + id, imdata)
 
 if __name__ == "__main__":

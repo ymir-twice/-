@@ -18,51 +18,37 @@ def data_augmentation(img, label):
     # 便于使用opencv或者其他图像处理库。 最后的返回值，也应该是 Image 对象， 
     # 因为torchvision.tranforms.ToTensor 以及 resize 要求只能对 Image 对象处理
 
-    r_img, if_salt = detect_and_denoise_salt_pepper(r_img, 0.05, 0.5)
+    if_salt = check(r_img)
     if if_salt:
+        r_img = median_filter_denoise(r_img, 3)
         r_img = CLAHE(r_img)
     else:
         r_img = gaussian_blur(r_img)
         r_img = CLAHE(r_img)
-
     return r_img, r_label
 
 
 def data_augmentation_test(img):
 
-    r_img = bilateral_filter_denoise(img, 3)
-    r_img = CLAHE(r_img)
-
+    if check(img):
+        r_img = median_filter_denoise(img, 3)
+        r_img = CLAHE(r_img)
+    else:
+        r_img = gaussian_blur(img)
+        r_img = CLAHE(r_img)
     return r_img
 
-def detect_and_denoise_salt_pepper(img, kernel_size=3, noise_threshold=0.02):
-    """
-    检测图像中的椒盐噪声并去噪。
-    参数:
-    - img (Image): 输入的 PIL 图像。
-    - kernel_size (int): 中值滤波器的窗口大小。
-    - noise_threshold (float): 判断噪声存在的阈值，默认0.02，即2%的极端像素。
-    
-    返回:
-    - Image: 经过去噪处理的图像（如果检测到噪声），否则返回原图像。
-    """
-    # 将图像转换为灰度
+
+def check(img, thr_low=0.0275, thr_high=0.4, high=8.8, low=0.432):
     gray_img = np.array(img.convert("L"))
-    
+
     # 计算极端像素的比例（假设0和255表示椒盐噪声）
     num_pixels = gray_img.size
-    salt_pepper_count = np.sum((gray_img == 0) | (gray_img == 255))
+    salt_count = np.sum(gray_img == 255)
+    pepper_count = np.sum(gray_img == 0) + 1e-6
+    salt_pepper_count = salt_count + pepper_count
     noise_ratio = salt_pepper_count / num_pixels
-    
-    # 检查是否存在椒盐噪声
-    if noise_ratio > noise_threshold:
-        # 应用中值滤波去除噪声
-        denoised_img = cv2.medianBlur(gray_img, kernel_size)
-        return Image.fromarray(denoised_img).convert("RGB"), True
-    else:
-        # 如果噪声水平低于阈值，直接返回原图像
-        return img, False
-
+    return (noise_ratio > thr_low) and (noise_ratio < thr_high) and (salt_count / pepper_count < high) and (salt_count / pepper_count > low)    
 
 def add_salt_pepper_noise(image, strength, exec_prob):
     """
@@ -106,11 +92,12 @@ def gaussian_blur(image):
         img_array = cv2.GaussianBlur(img_array, (5, 5), 0)  # 应用高斯滤波
     return Image.fromarray(img_array)  # 转换回 Image 对象
 
-def CLAHE(img):
+
+def CLAHE(img, clipLimit=2.0, tileGridSize=(8,8)):
     r_img = np.array(img)
     r_img = cv2.cvtColor(r_img, cv2.COLOR_RGB2LAB)
     r_img_l = r_img[:, :, 0] # Convert to range [0,1]
-    clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8,8))
+    clahe = cv2.createCLAHE(clipLimit=clipLimit, tileGridSize=tileGridSize)
     r_img_l = clahe.apply(r_img_l)
     r_img[:, :, 0] = r_img_l
     r_img = cv2.cvtColor(r_img, cv2.COLOR_LAB2RGB)

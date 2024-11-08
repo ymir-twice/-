@@ -13,8 +13,6 @@
                 "./eval/test_pred",
                 "--input_shape",
                 "200",
-                "--if_aug",
-                "1",
                 "--data_dir",
                 "data/images/testB3",
                 "--data_stats",

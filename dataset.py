@@ -42,7 +42,7 @@ class myTestDataset(torch.utils.data.Dataset):
     """
         此类用于加载测试时所需的数据 ， 跟上边的主要差别是，使用的数据增强的技术不容
     """
-    def __init__(self, idx_path, img_dir, imshape=200, if_aug=False):
+    def __init__(self, idx_path, img_dir, imshape=200):
         self.img_dir = img_dir
         self.img_names = list(pd.read_csv(idx_path, dtype=object)['id'])
         self.transform = transforms.Compose([
@@ -50,7 +50,6 @@ class myTestDataset(torch.utils.data.Dataset):
             transforms.ToTensor()
         ])
         self.data_enhance = data_augmentation_test
-        self.if_aug = if_aug
 
     def __len__(self):
         return len(self.img_names)
@@ -60,8 +59,7 @@ class myTestDataset(torch.utils.data.Dataset):
         img_path = os.path.join(self.img_dir, img_name + '.jpg')
 
         image = Image.open(img_path).convert('RGB')
-        if self.if_aug:
-            image = self.data_enhance(image)
+        image = self.data_enhance(image)
 
         image = self.transform(image)
 

@@ -1,19 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import random,os
-import numpy as np
-def set_random_seed(seed: int) -> None:
-	random.seed(seed)
-	os.environ['PYTHONHASHSEED'] = str(seed)
-	np.random.seed(seed)
-	torch.manual_seed(seed)
-	torch.cuda.manual_seed(seed)
-	torch.backends.cudnn.benchmark = False
-	torch.backends.cudnn.deterministic = True
 
-seed = 37
-set_random_seed(seed)
 class AxialDW(nn.Module):
     def __init__(self, dim, mixer_kernel, dilation = 1):
         super().__init__()
@@ -70,7 +58,7 @@ class DecoderBlock(nn.Module):
         x = self.act(self.pw2(self.dw(self.bn(self.pw(x)))))
 
         return x
-
+    
 class BottleNeckBlock(nn.Module):
     """Axial dilated DW convolution"""
     def __init__(self, dim):
@@ -92,9 +80,50 @@ class BottleNeckBlock(nn.Module):
         x = self.act(self.pw2(self.bn(x)))
         return x
 
+class SEBlock(nn.Module):
+    def __init__(self, in_channels, reduction=16):
+        super(SEBlock, self).__init__()
+        self.fc1 = nn.Conv2d(in_channels, in_channels // reduction, kernel_size=1)
+        self.fc2 = nn.Conv2d(in_channels // reduction, in_channels, kernel_size=1)
+        
+    def forward(self, x):
+        se_weight = torch.mean(x, dim=(2, 3), keepdim=True)
+        se_weight = torch.relu(self.fc1(se_weight))
+        se_weight = torch.sigmoid(self.fc2(se_weight))
+        return x * se_weight
+
+class SpatialAttention(nn.Module):
+    def __init__(self, kernel_size=7, out_channels=1):
+        super(SpatialAttention, self).__init__()
+        self.conv = nn.Conv2d(2, out_channels, kernel_size, padding=kernel_size // 2)
+    
+    def forward(self, x):
+        avg_out = torch.mean(x, dim=1, keepdim=True)
+        max_out, _ = torch.max(x, dim=1, keepdim=True)
+        x = torch.cat([avg_out, max_out], dim=1)
+        x = torch.sigmoid(self.conv(x))
+        return x * x
+
+class CBAM(nn.Module):
+    def __init__(self, in_channels, reduction=16, kernel_size=7, out_channels=1):
+        super(CBAM, self).__init__()
+        self.channel_attention = SEBlock(in_channels, reduction)
+        self.spatial_attention = SpatialAttention(kernel_size, out_channels)
+    
+    def forward(self, x):
+        x = self.channel_attention(x)
+        x = self.spatial_attention(x)
+        return x
+
 class self_net(nn.Module):
     def __init__(self):
         super().__init__()
+
+        """Attention Enhance"""
+        #self.cbam256 = CBAM(256, 32, 256)
+        self.cbam128 = CBAM(128, reduction=1, out_channels=128)
+        self.cbam64 = CBAM(64, reduction=1, out_channels=64)
+        self.cbam32 = CBAM(32, reduction=1, out_channels=32)
 
         """Encoder"""
         self.conv_in = nn.Conv2d(3, 16, kernel_size=7, padding='same')
@@ -128,10 +157,15 @@ class self_net(nn.Module):
         x = self.b5(x)          # 512 6 6
         """Decoder"""
         x = self.d5(x, skip5)   # 256 12 12
-        x = self.d4(x, skip4)
-        x = self.d3(x, skip3)
-        x = self.d2(x, skip2)
-        x = self.d1(x, skip1)
+        #x = self.cbam256(x)
+        x = self.d4(x, skip4)   # 128 25 25
+        print(x.shape)
+        x = self.cbam128(x)
+        print(x.shape)
+        x = self.d3(x, skip3)   # 64 50 50
+        x = self.cbam64(x)
+        x = self.d2(x, skip2)   # 32 100 100
+        x = self.d1(x, skip1)   # 16 200 200
         x = self.conv_out(x)
         return x
     
@@ -157,7 +191,12 @@ batch_size = 32
 trainloader = torch.utils.data.DataLoader(trainset, shuffle=True, batch_size=batch_size)
 
 device = torch.device('cuda:0')
-model = torch.load('models/ULite19.pth').to(device)
+model = self_net().to(device)
+
+
+# 模型参数量:
+num_params = sum(p.numel() for p in model.parameters())
+print(f'Number of parameters: {num_params / 1000000} M')
 
 lr = 0.001
 betas = (0.9, 0.999)
@@ -171,7 +210,7 @@ criterion = DiceLoss(weights=[0.68,1.5,0.81,1])#10 20 12 17
 from tqdm import tqdm
 from utils.lr_scheduler import WarmupMultiStepLR, WarmupCosineLR
 
-num_epochs = 1000
+num_epochs = 800
 total_loss = []
 epoch_loss = 0
 milestones = [50,100,150,200,250]
@@ -179,7 +218,7 @@ for epoch in range(1, num_epochs + 1):
     pbar = tqdm(trainloader, colour='#C0FF20')
     total_batchs = len(trainloader)
     pbar.set_description(f'{epoch}/{num_epochs}, total loss {epoch_loss:.5f}')
-    scheduler = WarmupCosineLR(optimizer, T_max=num_epochs + 1, last_epoch=epoch - 2, warmup_factor=1.0 / 3, warmup_iters=200)    # 有热身的cos loss 
+    scheduler = WarmupCosineLR(optimizer, T_max=num_epochs + 1, last_epoch=epoch - 2, warmup_factor=1.0 / 3, warmup_iters=80)    # 有热身的cos loss 
     #scheduler = WarmupMultiStepLR(optimizer,milestones=milestones,gamma=0.7,warmup_factor=1.0 / 3,warmup_iters=300)
     epoch_loss = 0
 
@@ -194,9 +233,9 @@ for epoch in range(1, num_epochs + 1):
         optimizer.step()
         pbar.set_postfix(loss=loss.item(), lr=optimizer.param_groups[0]['lr'])
     
-    if i == 200 or i == 500 or i == 800:
+    if epoch == 200 or epoch == 500 or epoch == 800:
         torch.save(model, "ULite_tmp.pth")
     scheduler.step()
     total_loss.append(epoch_loss)
 
-torch.save(model, 'ULite_cos1.pth')
+torch.save(model, f'models/GSSNet_cos1000.pth')

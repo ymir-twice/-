@@ -37,7 +37,7 @@ def load_all_as_globals(module_name):
 
 def get_dataLoader():
     testset = myTestDataset(idx_path=args.data_stats, 
-                        img_dir=args.data_dir, imshape=args.input_shape, if_aug=args.if_aug)
+                        img_dir=args.data_dir, imshape=args.input_shape)
     testloader = torch.utils.data.DataLoader(testset, batch_size=1, shuffle=False)
     return testloader
 
@@ -94,8 +94,6 @@ parser.add_argument('--save_dir', type=str,
                     help='path to folder containing predict result of model')
 parser.add_argument('--input_shape', type=int,
                     help='n for n × n')
-parser.add_argument('--if_aug', type=int,
-                    help='if use data autmentation')
 parser.add_argument('--data_dir', type=str,
                     help='path to data folder default is data/images/test/', default='data/images/test/')
 parser.add_argument('--data_stats', type=str,
