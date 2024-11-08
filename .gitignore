@@ -3,4 +3,3 @@ eval/*
 !eval/main.py
 models/*
 !models/networks.py
-!models/ULite_cos14.pth

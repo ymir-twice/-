@@ -11,7 +11,6 @@ import random
 def data_augmentation(img, label):
     r_img, r_label = img, label
     r_img, r_label = _random_mirror(r_img, r_label)
-    #r_img, r_label = _random_scale(r_img, r_label, r_edge)
     r_img, r_label = _random_rotation(r_img, r_label, is_reg=True)
     # TODO: 可以在这里添加其他的数据增强。 
     # 基本处理逻辑是： 输入是个 Image 对象，中间可以转化为 np.array 
@@ -23,7 +22,6 @@ def data_augmentation(img, label):
         r_img = median_filter_denoise(r_img, 3)
         r_img = CLAHE(r_img)
     else:
-        r_img = gaussian_blur(r_img)
         r_img = CLAHE(r_img)
     return r_img, r_label
 
@@ -34,7 +32,6 @@ def data_augmentation_test(img):
         r_img = median_filter_denoise(img, 3)
         r_img = CLAHE(r_img)
     else:
-        r_img = gaussian_blur(img)
         r_img = CLAHE(r_img)
     return r_img
 

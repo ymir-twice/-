@@ -80,48 +80,9 @@ class BottleNeckBlock(nn.Module):
         x = self.act(self.pw2(self.bn(x)))
         return x
 
-class SEBlock(nn.Module):
-    def __init__(self, in_channels, reduction=16):
-        super(SEBlock, self).__init__()
-        self.fc1 = nn.Conv2d(in_channels, in_channels // reduction, kernel_size=1)
-        self.fc2 = nn.Conv2d(in_channels // reduction, in_channels, kernel_size=1)
-        
-    def forward(self, x):
-        se_weight = torch.mean(x, dim=(2, 3), keepdim=True)
-        se_weight = torch.relu(self.fc1(se_weight))
-        se_weight = torch.sigmoid(self.fc2(se_weight))
-        return x * se_weight
-
-class SpatialAttention(nn.Module):
-    def __init__(self, kernel_size=7, out_channels=1):
-        super(SpatialAttention, self).__init__()
-        self.conv = nn.Conv2d(2, out_channels, kernel_size, padding=kernel_size // 2)
-    
-    def forward(self, x):
-        avg_out = torch.mean(x, dim=1, keepdim=True)
-        max_out, _ = torch.max(x, dim=1, keepdim=True)
-        x = torch.cat([avg_out, max_out], dim=1)
-        x = torch.sigmoid(self.conv(x))
-        return x * x
-
-class CBAM(nn.Module):
-    def __init__(self, in_channels, reduction=16, kernel_size=7, out_channels=1):
-        super(CBAM, self).__init__()
-        self.channel_attention = SEBlock(in_channels, reduction)
-        self.spatial_attention = SpatialAttention(kernel_size, out_channels)
-    
-    def forward(self, x):
-        x = self.channel_attention(x)
-        x = self.spatial_attention(x)
-        return x
-
 class self_net(nn.Module):
     def __init__(self):
         super().__init__()
-
-        """Attention Enhance"""
-        self.cbam256 = CBAM(256, reduction=2, out_channels=256)
-        self.cbam32 = CBAM(32, reduction=1, out_channels=32)
 
         """Encoder"""
         self.conv_in = nn.Conv2d(3, 16, kernel_size=7, padding='same')
@@ -155,11 +116,9 @@ class self_net(nn.Module):
         x = self.b5(x)          # 512 6 6
         """Decoder"""
         x = self.d5(x, skip5)   # 256 12 12
-        x = self.cbam256(x)
-        x = self.d4(x, skip4)   # 128 25 25
-        x = self.d3(x, skip3)   # 64 50 50
-        x = self.d2(x, skip2)   # 32 100 100
-        x = self.cbam32(x)
-        x = self.d1(x, skip1)   # 16 200 200
+        x = self.d4(x, skip4)
+        x = self.d3(x, skip3)
+        x = self.d2(x, skip2)
+        x = self.d1(x, skip1)
         x = self.conv_out(x)
         return x
