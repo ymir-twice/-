@@ -82,8 +82,10 @@ def concat_images_double(img1_name):
 
 def overlay(img_name):
     background = cv2.imread(f'data/images/training_ori/{img_name}.jpg', cv2.IMREAD_GRAYSCALE)
+    background_gt = cv2.imread(f'data/annotations/training_ori/{img_name}.png', cv2.IMREAD_GRAYSCALE)
     random_img = random.choice(trainmeta['id'])
     overlay = cv2.imread(f'data/images/training_ori/{random_img}.jpg', cv2.IMREAD_GRAYSCALE)
+    overlay_gt = cv2.imread(f'data/annotations/training_ori/{random_img}.png', cv2.IMREAD_GRAYSCALE)
 
     # 调整小图像的大小，若需要可以指定更小尺寸
     overlay_p1 = 0, 0
@@ -94,6 +96,7 @@ def overlay(img_name):
 
     # 创建一个彩色版本的背景用于合并显示
     background_color = cv2.cvtColor(background, cv2.COLOR_GRAY2BGR)
+    background_gt = cv2.cvtColor(background_gt, cv2.COLOR_GRAY2BGR)
 
     # 不规则拼接：循环每个位置，将未缩放的小图像叠加到背景图上
     for pos in positions:
@@ -104,17 +107,24 @@ def overlay(img_name):
         # 对 overlay 进行裁剪以匹配 ROI 的尺寸
         overlay_cropped = overlay[start_y:end_y, start_x:end_x]
         overlay_color = cv2.cvtColor(overlay_cropped, cv2.COLOR_GRAY2BGR)
+        overlay_gt_cropped = overlay_gt[start_y:end_y, start_x:end_x]
+        overlay_gt_color = cv2.cvtColor(overlay_gt_cropped, cv2.COLOR_GRAY2BGR)
 
         # 提取背景中的 ROI
         roi = background_color[start_y:end_y, start_x:end_x]
+        roi_gt = background_gt[start_y:end_y, start_x:end_x]
 
         # 创建遮罩，将非零区域的值设为 255
         mask = np.ones_like(overlay_cropped, dtype=np.uint8) * 255
+        mask_gt = np.ones_like(overlay_gt_cropped, dtype=np.uint8) * 255
 
         # 使用遮罩将 overlay 不规则地叠加到背景图上
         np.copyto(roi, overlay_color, where=(mask[..., None] == 255))
+        np.copyto(roi_gt, overlay_gt_color, where=(mask_gt[..., None] == 255))
     background_color = Image.fromarray(cv2.cvtColor(background_color, cv2.COLOR_BGR2RGB))
     background_color.save(f'data/images/training/5{img_name}.jpg')
+    background_gt = Image.fromarray(background_gt[:, :, 0])
+    background_gt.save(f'data/annotations/training/5{img_name}.png')
 
 
 def add_salt_pepper_noise(img, pepper_salt_prob=0.039, salt_vs_pepper=[0.432, 8.8]):
@@ -187,15 +197,15 @@ if __name__ == "__main__":
 
 
     print('生成对角 0')
-    # trainmeta['id'].apply(concat_images)
+    trainmeta['id'].apply(concat_images)
     print('生成上下左右 1 2')
-    # trainmeta['id'].apply(concat_images_double)
+    trainmeta['id'].apply(concat_images_double)
     print('生成噪声图 3')
-    # trainmeta['id'].apply(images_add_noise)
+    trainmeta['id'].apply(images_add_noise)
     print('生成不规则图 5')
     trainmeta['id'].apply(overlay)
     print('生成原图 4')
-    # trainmeta['id'].apply(original)
+    trainmeta['id'].apply(original)
 
     new_csv = os.listdir('data/images/training')
     new_csv = [x.split('.')[0] for x in new_csv]
