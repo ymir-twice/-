@@ -20,6 +20,9 @@ def data_augmentation(img, label):
         r_img = CLAHE(r_img, clipLimit=4.0)
     else:
         r_img = CLAHE(r_img, clipLimit=2.0)
+
+    # image = laplacian_pyramid_enhance_opencv(image, alpha=4, num_levels=3, channel_index=0)  // 可以自行调节
+    # image = USM(image, gamma=1.5)                                                            // 可以自行调节
     return r_img, r_label
 
 
@@ -43,6 +46,10 @@ def check(img, thr_low=0.0218, thr_high=0.308, high=13.06, low=0.248):
     noise_ratio = salt_pepper_count / num_pixels
     return (noise_ratio > thr_low) and (noise_ratio < thr_high) and (salt_count / pepper_count < high) and (salt_count / pepper_count > low)    
 
+def USM(image, gamma=1.5):
+    img = np.array(image)
+    blurred = cv2.GaussianBlur(img, (9, 9), 10)
+    return Image.fromarray(cv2.addWeighted(img, 1.5, blurred, -0.5, 0))
 
 def add_salt_pepper_noise(image, strength, exec_prob):
     """
@@ -85,7 +92,6 @@ def gaussian_blur(image):
     if np.random.random() < DA_ARGS['p_random_gaussian_blur']:
         img_array = cv2.GaussianBlur(img_array, (5, 5), 0)  # 应用高斯滤波
     return Image.fromarray(img_array)  # 转换回 Image 对象
-
 
 def CLAHE(img, clipLimit=2.0, tileGridSize=(8,8)):
     r_img = np.array(img)
@@ -227,6 +233,62 @@ def bilateral_filter_denoise(img, d=9, sigmaColor=75, sigmaSpace=75):
     denoised_img = cv2.bilateralFilter(gray_img, d, sigmaColor, sigmaSpace)
     #denoised_img = denoised_img.convert("RGB")
     return Image.fromarray(denoised_img).convert("RGB")
+
+def build_laplacian_pyramid(channel, levels):
+    # 构建高斯金字塔
+    gaussian_pyramid = [channel]
+    for i in range(levels):
+        channel = cv2.pyrDown(channel)
+        gaussian_pyramid.append(channel)
+
+    # 构建拉普拉斯金字塔
+    laplacian_pyramid = []
+    for i in range(levels, 0, -1):
+        gaussian_expanded = cv2.pyrUp(gaussian_pyramid[i], dstsize=(gaussian_pyramid[i-1].shape[1], gaussian_pyramid[i-1].shape[0]))
+        laplacian = cv2.subtract(gaussian_pyramid[i-1], gaussian_expanded)
+        laplacian_pyramid.append(laplacian)
+
+    return laplacian_pyramid
+
+def enhance_laplacian_pyramid(laplacian_pyramid, alpha):
+    # 增强拉普拉斯金字塔的每一层
+    enhanced_pyramid = [lap * alpha for lap in laplacian_pyramid]
+    return enhanced_pyramid
+
+def reconstruct_from_laplacian_pyramid(laplacian_pyramid, original_shape):
+    # 从增强后的拉普拉斯金字塔重建图像
+    channel = laplacian_pyramid[0]
+    for i in range(1, len(laplacian_pyramid)):
+        channel = cv2.pyrUp(channel, dstsize=(laplacian_pyramid[i].shape[1], laplacian_pyramid[i].shape[0]))
+        channel = cv2.add(channel, laplacian_pyramid[i])
+    # Resize to the original shape to match the other channels
+    channel = cv2.resize(channel, (original_shape[1], original_shape[0]))
+    return channel
+
+def laplacian_pyramid_enhance_opencv(img, alpha=1.5, num_levels=5, channel_index=0):
+    # 读取图像
+    img = np.array(img)
+    img = img.astype(np.float32)  # 转换为浮点数格式以增强对比度
+
+    # 将图像分为 B, G, R 三个通道，并转换为可修改的列表
+    channels = list(cv2.split(img))
+    
+    # 对指定通道应用拉普拉斯金字塔增强
+    original_shape = channels[channel_index].shape
+    laplacian_pyr = build_laplacian_pyramid(channels[channel_index], num_levels)
+    enhanced_pyr = enhance_laplacian_pyramid(laplacian_pyr, alpha)
+    enhanced_channel = reconstruct_from_laplacian_pyramid(enhanced_pyr, original_shape)
+    
+    # 将增强后的通道值限制在 0-255 之间，并转换为 uint8 格式
+    enhanced_channel = np.clip(enhanced_channel, 0, 255).astype(np.uint8)
+    channels[channel_index] = enhanced_channel  # 替换指定通道
+    for i in range(len(channels)):
+        channels[i] = cv2.resize(channels[i], (original_shape[1], original_shape[0]))
+        channels[i] = channels[i].astype(np.uint8)
+    # 合并通道
+    enhanced_img = cv2.merge(channels)
+
+    return Image.fromarray(enhanced_img.astype(np.uint8))
 
 
 # 以下是一些传统的数据增强方法，可以直接使用
