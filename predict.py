@@ -81,8 +81,7 @@ def main(model_path, result_path):
         elapsed_time[i] = (end - begin)
         out = np.array(out.cpu()).squeeze(0)
 
-        #print(result_path + img_name[0])
-        np.save(result_path + "prediction_" + img_name, out)
+        np.save(result_path + "c_prediction_" + img_name, out)
 
     total_elapsed_time = sum(elapsed_time)
     return total_elapsed_time

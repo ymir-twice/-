@@ -13,30 +13,26 @@ def data_augmentation(img, label):
     r_img, r_label = _random_mirror(r_img, r_label)
     r_img, r_label = _random_rotation(r_img, r_label, is_reg=True)
     # TODO: 可以在这里添加其他的数据增强。 
-    # 基本处理逻辑是： 输入是个 Image 对象，中间可以转化为 np.array 
-    # 便于使用opencv或者其他图像处理库。 最后的返回值，也应该是 Image 对象， 
-    # 因为torchvision.tranforms.ToTensor 以及 resize 要求只能对 Image 对象处理
 
     if_salt = check(r_img)
     if if_salt:
         r_img = median_filter_denoise(r_img, 3)
-        r_img = CLAHE(r_img)
+        r_img = CLAHE(r_img, clipLimit=4.0)
     else:
-        r_img = CLAHE(r_img)
+        r_img = CLAHE(r_img, clipLimit=2.0)
     return r_img, r_label
 
 
 def data_augmentation_test(img):
-
     if check(img):
         r_img = median_filter_denoise(img, 3)
-        r_img = CLAHE(r_img)
+        r_img = CLAHE(r_img, clipLimit=4.0)
     else:
-        r_img = CLAHE(r_img)
+        r_img = CLAHE(img, clipLimit=2.0)
     return r_img
 
 
-def check(img, thr_low=0.0275, thr_high=0.4, high=8.8, low=0.432):
+def check(img, thr_low=0.0218, thr_high=0.308, high=13.06, low=0.248):
     gray_img = np.array(img.convert("L"))
 
     # 计算极端像素的比例（假设0和255表示椒盐噪声）
@@ -46,6 +42,7 @@ def check(img, thr_low=0.0275, thr_high=0.4, high=8.8, low=0.432):
     salt_pepper_count = salt_count + pepper_count
     noise_ratio = salt_pepper_count / num_pixels
     return (noise_ratio > thr_low) and (noise_ratio < thr_high) and (salt_count / pepper_count < high) and (salt_count / pepper_count > low)    
+
 
 def add_salt_pepper_noise(image, strength, exec_prob):
     """
@@ -190,7 +187,7 @@ def gaussian_blur(image):
 def usm_sharpen(image, radius=5, threshold=10, amount=150):
     # 将 PIL Image 对象转换为 np.array
     img_array = np.array(image)
-    
+
     # 使用 OpenCV 的 GaussianBlur 进行模糊处理
     blurred = cv2.GaussianBlur(img_array, (radius, radius), 0)
 
@@ -206,7 +203,7 @@ def usm_sharpen(image, radius=5, threshold=10, amount=150):
 
     # 确保像素值合法
     sharpened = np.clip(sharpened, 0, 255).astype(np.uint8)
-    
+
     # 将结果转换回 PIL Image 对象
     return Image.fromarray(sharpened)
 
@@ -230,8 +227,6 @@ def bilateral_filter_denoise(img, d=9, sigmaColor=75, sigmaSpace=75):
     denoised_img = cv2.bilateralFilter(gray_img, d, sigmaColor, sigmaSpace)
     #denoised_img = denoised_img.convert("RGB")
     return Image.fromarray(denoised_img).convert("RGB")
-
-
 
 
 # 以下是一些传统的数据增强方法，可以直接使用

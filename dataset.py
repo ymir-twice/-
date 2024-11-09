@@ -36,7 +36,7 @@ class myDataset(torch.utils.data.Dataset):
             mask = self.mask_transform(mask)
 
         return image, mask
-    
+
 
 class myTestDataset(torch.utils.data.Dataset):
     """

@@ -34,13 +34,6 @@ class DecoderBlock(nn.Module):
         super().__init__()
         self.up = nn.Upsample(scale_factor=2)
         self.size = size
-            # self.up = nn.ConvTranspose2d(
-            #             in_channels=256,
-            #             out_channels=256,
-            #             kernel_size=5,  
-            #             stride=2, 
-            #             padding=1  
-            #         
 
         self.pw = nn.Conv2d(in_c + out_c, out_c,kernel_size=1)
         self.bn = nn.BatchNorm2d(out_c)
@@ -80,6 +73,41 @@ class BottleNeckBlock(nn.Module):
         x = self.act(self.pw2(self.bn(x)))
         return x
 
+class SEBlock(nn.Module):
+    def __init__(self, in_channels, reduction=16):
+        super(SEBlock, self).__init__()
+        self.fc1 = nn.Conv2d(in_channels, in_channels // reduction, kernel_size=1)
+        self.fc2 = nn.Conv2d(in_channels // reduction, in_channels, kernel_size=1)
+        
+    def forward(self, x):
+        se_weight = torch.mean(x, dim=(2, 3), keepdim=True)
+        se_weight = torch.relu(self.fc1(se_weight))
+        se_weight = torch.sigmoid(self.fc2(se_weight))
+        return x * se_weight
+
+class SpatialAttention(nn.Module):
+    def __init__(self, kernel_size=7, out_channels=1):
+        super(SpatialAttention, self).__init__()
+        self.conv = nn.Conv2d(2, out_channels, kernel_size, padding=kernel_size // 2)
+    
+    def forward(self, x):
+        avg_out = torch.mean(x, dim=1, keepdim=True)
+        max_out, _ = torch.max(x, dim=1, keepdim=True)
+        x = torch.cat([avg_out, max_out], dim=1)
+        x = torch.sigmoid(self.conv(x))
+        return x * x
+
+class CBAM(nn.Module):
+    def __init__(self, in_channels, reduction=16, kernel_size=7, out_channels=1):
+        super(CBAM, self).__init__()
+        self.channel_attention = SEBlock(in_channels, reduction)
+        self.spatial_attention = SpatialAttention(kernel_size, out_channels)
+    
+    def forward(self, x):
+        x = self.channel_attention(x)
+        x = self.spatial_attention(x)
+        return x
+
 class self_net(nn.Module):
     def __init__(self):
         super().__init__()
@@ -116,80 +144,9 @@ class self_net(nn.Module):
         x = self.b5(x)          # 512 6 6
         """Decoder"""
         x = self.d5(x, skip5)   # 256 12 12
-        x = self.d4(x, skip4)
-        x = self.d3(x, skip3)
-        x = self.d2(x, skip2)
-        x = self.d1(x, skip1)
+        x = self.d4(x, skip4)   # 128 25 25
+        x = self.d3(x, skip3)   # 64 50 50
+        x = self.d2(x, skip2)   # 32 100 100
+        x = self.d1(x, skip1)   # 16 200 200
         x = self.conv_out(x)
         return x
-
-from dataset import *
-from torchvision import transforms
-import numpy as np
-
-# 定义图像和掩码的预处理
-image_transform = transforms.Compose([
-    transforms.Resize((200, 200)),
-    transforms.ToTensor()
-])
-
-mask_transform = transforms.Compose([
-    transforms.Resize((200, 200)),
-    transforms.Lambda(lambda x: torch.tensor(np.array(x), dtype=torch.long)) 
-])
-
-# 创建数据集对象
-trainset = myDataset(idx_path='stats/train-meta.csv', img_dir='data/images/training/', mask_dir='data/annotations/training/', transform=image_transform, mask_transform=mask_transform)
-
-batch_size = 32
-trainloader = torch.utils.data.DataLoader(trainset, shuffle=True, batch_size=batch_size)
-
-device = torch.device('cuda:0')
-model = self_net().to(device)
-
-
-# 模型参数量:
-num_params = sum(p.numel() for p in model.parameters())
-print(f'Number of parameters: {num_params / 1000000} M')
-
-lr = 0.001
-betas = (0.9, 0.999)
-weight_decay = 5e-3
-#optimizer = torch.optim.SGD(model.parameters(), lr, momentum=0.9, nesterov=True, weight_decay=weight_decay)
-optimizer = torch.optim.Adam(model.parameters(), lr, betas)
-
-from utils.loss_function.dice_loss import DiceLoss
-criterion = DiceLoss(weights=[0.68,1.5,0.81,1])#10 20 12 17
-
-from tqdm import tqdm
-from utils.lr_scheduler import WarmupMultiStepLR, WarmupCosineLR
-
-num_epochs = 800
-total_loss = []
-epoch_loss = 0
-milestones = [50,100,150,200,250]
-for epoch in range(1, num_epochs + 1):
-    pbar = tqdm(trainloader, colour='#C0FF20')
-    total_batchs = len(trainloader)
-    pbar.set_description(f'{epoch}/{num_epochs}, total loss {epoch_loss:.5f}')
-    scheduler = WarmupCosineLR(optimizer, T_max=num_epochs + 1, last_epoch=epoch - 2, warmup_factor=1.0 / 3, warmup_iters=80)    # 有热身的cos loss 
-    #scheduler = WarmupMultiStepLR(optimizer,milestones=milestones,gamma=0.7,warmup_factor=1.0 / 3,warmup_iters=300)
-    epoch_loss = 0
-
-    for i, (inputs, gts) in enumerate(pbar):
-        inputs, gts = inputs.to(device), gts.to(device)
-        optimizer.zero_grad()
-        outputs = model(inputs)
-
-        loss = criterion(outputs, gts)
-        epoch_loss += loss.item()
-        loss.backward()
-        optimizer.step()
-        pbar.set_postfix(loss=loss.item(), lr=optimizer.param_groups[0]['lr'])
-    
-    if epoch == 200 or epoch == 500 or epoch == 800:
-        torch.save(model, "ULite_tmp.pth")
-    scheduler.step()
-    total_loss.append(epoch_loss)
-
-torch.save(model, f'models/GSSNet_cos1000.pth')
