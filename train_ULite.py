@@ -164,6 +164,9 @@ criterion = DiceLoss(weights=[0.68,1.5,0.81,1])#10 20 12 17
 from tqdm import tqdm
 from utils.lr_scheduler import WarmupMultiStepLR, WarmupCosineLR
 
+from torch.cuda.amp import GradScaler, autocast
+scaler = GradScaler('cuda:0')
+
 num_epochs = 800
 total_loss = []
 epoch_loss = 0
@@ -179,12 +182,15 @@ for epoch in range(1, num_epochs + 1):
     for i, (inputs, gts) in enumerate(pbar):
         inputs, gts = inputs.to(device), gts.to(device)
         optimizer.zero_grad()
-        outputs = model(inputs)
-
-        loss = criterion(outputs, gts)
+        with autocast(device='cuda:0'):
+            outputs = model(inputs)
+            loss = criterion(outputs, gts)
         epoch_loss += loss.item()
-        loss.backward()
-        optimizer.step()
+        scaler.scale(loss).backward()
+        scaler.step(optimizer)
+        scaler.update()
+        # loss.backward()
+        # optimizer.step()
         pbar.set_postfix(loss=loss.item(), lr=optimizer.param_groups[0]['lr'])
     
     if epoch == 200 or epoch == 500 or epoch == 800:
