@@ -47,7 +47,7 @@ def concat_zuoyou(img1, img2):
     new_image.paste(img2, (half_width, 0))
     return new_image
 
-def concat_images(img1_name):
+def concat_images(img1_name, prifix='0'):
     img1 = Image.open(train_ori_dir + img1_name + impost['f'])
     img2_name = random.choice(trainmeta['id'])
     img2 = Image.open(train_ori_dir + img2_name + impost['f'])
@@ -57,10 +57,10 @@ def concat_images(img1_name):
     new_image = concat_duijiao(img1, img2)
     new_image_gt = concat_duijiao(img1_gt, img2_gt)
 
-    new_image.save(train_dir + '0' + img1_name + '.jpg')
-    new_image_gt.save(train_gt_dir + '0' + img1_name + '.png')
+    new_image.save(train_dir + prifix + img1_name + '.jpg')
+    new_image_gt.save(train_gt_dir + prifix + img1_name + '.png')
 
-def concat_images_double(img1_name):
+def concat_images_double(img1_name, prifix1='1', prifix2='2'):
     img1 = Image.open(train_ori_dir + img1_name + impost['f'])
     im2_name = random.choice(trainmeta['id'])
     img2 = Image.open(train_ori_dir + im2_name + impost['f'])
@@ -70,17 +70,17 @@ def concat_images_double(img1_name):
     # 上下拼接
     new_image = concat_shangxia(img1, img2)
     new_image_gt = concat_shangxia(img1_gt, img2_gt)
-    new_image.save(train_dir + '1' + img1_name + '.jpg')
-    new_image_gt.save(train_gt_dir + '1' + img1_name + '.png')
+    new_image.save(train_dir + prifix1 + img1_name + '.jpg')
+    new_image_gt.save(train_gt_dir + prifix1 + img1_name + '.png')
     
     # 左右拼接
     new_image = concat_zuoyou(img1, img2)
     new_image_gt = concat_zuoyou(img1_gt, img2_gt)
-    new_image.save(train_dir + '2' + img1_name + '.jpg')
-    new_image_gt.save(train_gt_dir + '2' + img1_name + '.png')
+    new_image.save(train_dir + prifix2 + img1_name + '.jpg')
+    new_image_gt.save(train_gt_dir + prifix2 + img1_name + '.png')
 
 
-def overlay(img_name):
+def overlay(img_name, prifix='5'):
     background = cv2.imread(f'data/images/training_ori/{img_name}.jpg', cv2.IMREAD_GRAYSCALE)
     background_gt = cv2.imread(f'data/annotations/training_ori/{img_name}.png', cv2.IMREAD_GRAYSCALE)
     random_img = random.choice(trainmeta['id'])
@@ -122,9 +122,9 @@ def overlay(img_name):
         np.copyto(roi, overlay_color, where=(mask[..., None] == 255))
         np.copyto(roi_gt, overlay_gt_color, where=(mask_gt[..., None] == 255))
     background_color = Image.fromarray(cv2.cvtColor(background_color, cv2.COLOR_BGR2RGB))
-    background_color.save(f'data/images/training/5{img_name}.jpg')
+    background_color.save('data/images/training/' + prifix + f'{img_name}.jpg')
     background_gt = Image.fromarray(background_gt[:, :, 0])
-    background_gt.save(f'data/annotations/training/5{img_name}.png')
+    background_gt.save('data/annotations/training/' + prifix + f'{img_name}.png')
 
 
 def add_salt_pepper_noise(img, pepper_salt_prob=0.039, salt_vs_pepper=[0.432, 8.8]):
@@ -161,21 +161,21 @@ def add_salt_pepper_noise(img, pepper_salt_prob=0.039, salt_vs_pepper=[0.432, 8.
 
     return Image.fromarray(img_array)
 
-def images_add_noise(img_name):
+def images_add_noise(img_name, prifix='3'):
     img1 = Image.open(train_ori_dir + img_name + impost['f'])
     img1_gt = Image.open(train_ori_gt_dir + img_name + impost['l'])
 
     new_image = add_salt_pepper_noise(img1)
-    new_image.save(train_dir + '3' + img_name + '.jpg')
-    img1_gt.save(train_gt_dir + '3' + img_name + '.png')
+    new_image.save(train_dir + prifix + img_name + '.jpg')
+    img1_gt.save(train_gt_dir + prifix + img_name + '.png')
 
 
-def original(img_name):
+def original(img_name, prifix='4'):
     img1 = Image.open(train_ori_dir + img_name + impost['f'])
     img1_gt = Image.open(train_ori_gt_dir + img_name + impost['l'])
 
-    img1.save(train_dir + '4' + img_name + '.jpg')
-    img1_gt.save(train_gt_dir + '4' + img_name + '.png')
+    img1.save(train_dir + prifix + img_name + '.jpg')
+    img1_gt.save(train_gt_dir + prifix + img_name + '.png')
 
 
 if __name__ == "__main__":
@@ -197,15 +197,15 @@ if __name__ == "__main__":
 
 
     print('生成对角 0')
-    trainmeta['id'].apply(concat_images)
+    trainmeta['id'].apply(lambda x : concat_images(x, '0'))
     print('生成上下左右 1 2')
-    trainmeta['id'].apply(concat_images_double)
+    trainmeta['id'].apply(lambda x : concat_images_double(x, '1', '2'))
     print('生成噪声图 3')
-    trainmeta['id'].apply(images_add_noise)
+    trainmeta['id'].apply(lambda x : images_add_noise(x, '3'))
     print('生成不规则图 5')
-    trainmeta['id'].apply(overlay)
+    trainmeta['id'].apply(lambda x : overlay(x, '5'))
     print('生成原图 4')
-    trainmeta['id'].apply(original)
+    trainmeta['id'].apply(lambda x : original(x, '4'))
 
     new_csv = os.listdir('data/images/training')
     new_csv = [x.split('.')[0] for x in new_csv]
