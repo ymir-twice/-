@@ -178,6 +178,37 @@ def original(img_name, prifix='4'):
     img1_gt.save(train_gt_dir + prifix + img_name + '.png')
 
 
+def mixup(img_name, prefix='6', alpha=0.4):
+    # 读取原始图像和标签
+    img1 = Image.open(train_ori_dir + img_name + impost['f'])
+    img1_gt = Image.open(train_ori_gt_dir + img_name + impost['l'])
+
+    img_name2 = random.choice(trainmeta['id'])
+    img2 = Image.open(train_ori_dir + img_name2 + impost['f'])
+    img2_gt = Image.open(train_ori_gt_dir + img_name2 + impost['l'])
+
+    # 将图像和标签转换为 NumPy 数组
+    img1_array = np.array(img1)
+    img2_array = np.array(img2)
+    img1_gt_array = np.array(img1_gt)
+    img2_gt_array = np.array(img2_gt)
+
+    # 从 Beta 分布中采样 λ
+    lam = np.random.beta(alpha, alpha)
+
+    # 生成混合图像和混合标签
+    mixed_img_array = (lam * img1_array + (1 - lam) * img2_array).astype(np.uint8)
+    mixed_gt_array = (lam * img1_gt_array + (1 - lam) * img2_gt_array).astype(np.uint8)
+
+    # 将混合后的数据转换为图像
+    mixed_img = Image.fromarray(mixed_img_array)
+    mixed_gt = Image.fromarray(mixed_gt_array)
+
+    # 保存混合后的图像和标签
+    mixed_img.save(train_dir + prefix + img_name + img_name2 + '.jpg')
+    mixed_gt.save(train_gt_dir + prefix + img_name + img_name2 + '.png')
+
+
 if __name__ == "__main__":
     # 读取数据，配置文本
     train_ori_dir = 'data/images/training_ori/'
@@ -206,6 +237,8 @@ if __name__ == "__main__":
     trainmeta['id'].apply(lambda x : overlay(x, '5'))
     print('生成原图 4')
     trainmeta['id'].apply(lambda x : original(x, '4'))
+    print('生成mixup 6')
+    trainmeta['id'].apply(lambda x : mixup(x, '6'))
 
     new_csv = os.listdir('data/images/training')
     new_csv = [x.split('.')[0] for x in new_csv]

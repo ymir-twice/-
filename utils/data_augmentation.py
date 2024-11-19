@@ -33,8 +33,8 @@ def data_augmentation_test(img):
     else:
         r_img = CLAHE(img, clipLimit=2.0)
 
-    r_img = laplacian_pyramid_enhance_opencv(r_img, alpha=1, num_levels=3, channel_index=0)
-    r_img = USM(r_img, gamma=1.5) 
+    # r_img = laplacian_pyramid_enhance_opencv(r_img, alpha=1, num_levels=3, channel_index=0)
+    # r_img = USM(r_img, gamma=1.5) 
     return r_img
 
 
